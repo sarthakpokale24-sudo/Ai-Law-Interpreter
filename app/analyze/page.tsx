@@ -238,11 +238,19 @@ export default function AnalyzePage() {
 
     addText(`Named Entities`, 14, true, [0, 0, 0], 5);
     if (reportData.entities) {
-      if (reportData.entities.persons?.length) addText(`Persons: ${reportData.entities.persons.join(', ')}`, 11, false, [80, 80, 80], 5);
-      if (reportData.entities.locations?.length) addText(`Locations: ${reportData.entities.locations.join(', ')}`, 11, false, [80, 80, 80], 5);
-      if (reportData.entities.organizations?.length) addText(`Organizations: ${reportData.entities.organizations.join(', ')}`, 11, false, [80, 80, 80], 5);
-      if (reportData.entities.dates?.length) addText(`Dates: ${reportData.entities.dates.join(', ')}`, 11, false, [80, 80, 80], 5);
-      if (reportData.entities.legalTerms?.length) addText(`Legal Terms: ${reportData.entities.legalTerms.join(', ')}`, 11, false, [80, 80, 80], 5);
+      const printEntities = (label: string, data: any) => {
+        if (Array.isArray(data) && data.length > 0) {
+          addText(`${label}: ${data.join(', ')}`, 11, false, [80, 80, 80], 5);
+        } else if (typeof data === 'string' && data.trim().length > 0) {
+          addText(`${label}: ${data}`, 11, false, [80, 80, 80], 5);
+        }
+      };
+      
+      printEntities('Persons', reportData.entities.persons);
+      printEntities('Locations', reportData.entities.locations);
+      printEntities('Organizations', reportData.entities.organizations);
+      printEntities('Dates', reportData.entities.dates);
+      printEntities('Legal Terms', reportData.entities.legalTerms);
     }
 
     return pdf;

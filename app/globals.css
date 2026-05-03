@@ -200,3 +200,11 @@ body {
     @apply font-sans;
   }
 }
+
+/* Hide Spline Watermark */
+a[href*="spline.design"] {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
