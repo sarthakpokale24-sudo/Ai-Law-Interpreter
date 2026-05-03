@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useUser } from '@clerk/nextjs';
 import { FileText, File, Gavel, FileVolume, UploadCloud, Loader2, KeyRound, AlertCircle, Download, CheckCircle2 } from 'lucide-react';
 import emailjs from '@emailjs/browser';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 type AnalysisType = 'Legal Text' | 'PDF' | 'FIR' | 'Hearing Summary';
 
@@ -164,11 +166,8 @@ export default function AnalyzePage() {
     }
   };
 
-  const createPDFDocument = async (reportData: AnalysisResult, type: string) => {
-    const jsPDFModule = await import('jspdf');
-    const JsPDFClass = jsPDFModule.default || jsPDFModule.jsPDF as any;
-    
-    const pdf = new JsPDFClass({
+  const createPDFDocument = (reportData: AnalysisResult, type: string) => {
+    const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'pt',
       format: 'a4'
@@ -179,19 +178,17 @@ export default function AnalyzePage() {
     const pageWidth = pdf.internal.pageSize.width;
     const maxWidth = pageWidth - 2 * margin;
 
-    // Helper function to sanitize text for jsPDF default fonts
     const sanitizeText = (text: string) => {
       if (!text) return '';
       return text
         .replace(/₹/g, 'Rs. ')
-        .replace(/[\u2018\u2019]/g, "'") // smart single quotes
-        .replace(/[\u201C\u201D]/g, '"') // smart double quotes
-        .replace(/[\u2013\u2014]/g, '-') // en and em dashes
-        .replace(/[\u2026]/g, '...') // ellipsis
-        .replace(/[^\x00-\x7F]/g, ''); // strip remaining non-ASCII characters that break jsPDF
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/[\u2013\u2014]/g, '-')
+        .replace(/[\u2026]/g, '...')
+        .replace(/[^\x00-\x7F]/g, '');
     };
 
-    // Helper function to add text and update yOffset
     const addText = (rawText: string, fontSize: number, isBold: boolean, color: number[], extraSpacing = 10) => {
       const text = sanitizeText(rawText);
       pdf.setFontSize(fontSize);
@@ -200,7 +197,6 @@ export default function AnalyzePage() {
       
       const lines = pdf.splitTextToSize(text, maxWidth);
       
-      // Check if we need a new page
       if (yOffset + lines.length * (fontSize * 1.2) > pdf.internal.pageSize.height - margin) {
         pdf.addPage();
         yOffset = margin;
@@ -210,15 +206,10 @@ export default function AnalyzePage() {
       yOffset += lines.length * (fontSize * 1.2) + extraSpacing;
     };
 
-    // Add Title
     addText(`Legal Analysis Report`, 24, true, [0, 0, 0], 20);
-
-    // Add Metadata
     addText(`Generated: ${new Date().toLocaleString()}`, 10, false, [100, 100, 100], 5);
     addText(`Analysis Type: ${type}`, 10, false, [100, 100, 100], 20);
-
     addText(reportData.title, 18, true, [50, 50, 150], 15);
-
     addText(`Summary`, 14, true, [0, 0, 0], 5);
     addText(reportData.summary, 12, false, [50, 50, 50], 15);
 
@@ -257,13 +248,12 @@ export default function AnalyzePage() {
     return pdf;
   };
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     if (!result) return;
-    
     try {
       setIsLoading(true);
-      const pdf = await createPDFDocument(result, selectedType);
-      pdf.save(`Analysis_${selectedType.replace(' ', '_')}_${new Date().getTime()}.pdf`);
+      const pdf = createPDFDocument(result, selectedType);
+      pdf.save(`Analysis_${selectedType.replace(/ /g, '_')}_${new Date().getTime()}.pdf`);
     } catch (err: any) {
       console.error("PDF generation failed:", err);
       setError("Failed to generate PDF: " + (err.message || "Unknown error"));
@@ -404,137 +394,131 @@ export default function AnalyzePage() {
           </div>
 
           {/* Results Area */}
-          <AnimatePresence>
-            {result && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-6"
-              >
-                <div id="report-container" className="glass-card p-8 md:p-10 relative">
-                  {/* Download Button */}
-                  <button 
-                    onClick={handleDownload}
-                    className="absolute top-8 right-8 p-2 rounded-full glass hover:bg-white/10 text-gray-300 transition-colors"
-                    title="Download Report"
-                  >
-                    <Download className="w-5 h-5" />
-                  </button>
+          {result && (
+            <div className="space-y-6">
+              <div id="report-container" className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-xl p-8 md:p-10 relative">
+                {/* Download Button */}
+                <button 
+                  onClick={handleDownload}
+                  className="absolute top-8 right-8 p-2 rounded-full glass hover:bg-white/10 text-gray-300 transition-colors"
+                  title="Download Report"
+                >
+                  <Download className="w-5 h-5" />
+                </button>
 
-                  <div className="border-b border-white/10 pb-6 mb-8">
-                    <h2 className="text-3xl font-bold text-white mb-2">Legal Analysis Report</h2>
-                    <div className="flex flex-wrap gap-4 text-sm text-gray-400">
-                      <span>Generated: {new Date().toLocaleString()}</span>
-                      <span>•</span>
-                      <span className="text-purple-400 font-medium">Analysis Type: {selectedType}</span>
-                    </div>
-                  </div>
-
-                  <h3 className="text-2xl font-bold text-purple-300 mb-6">{result.title}</h3>
-
-                  <div className="space-y-8">
-                    <section>
-                      <h4 className="text-xl font-bold text-white mb-3 border-l-4 border-purple-500 pl-3">Summary</h4>
-                      <p className="text-gray-300 leading-relaxed bg-black/20 p-5 rounded-xl border border-white/5">
-                        {result.summary}
-                      </p>
-                    </section>
-
-                    <section>
-                      <h4 className="text-xl font-bold text-white mb-3 border-l-4 border-blue-500 pl-3">Key Points</h4>
-                      <ul className="space-y-3 bg-black/20 p-5 rounded-xl border border-white/5">
-                        {Array.isArray(result.keyPoints) && result.keyPoints.length > 0 ? result.keyPoints.map((point: string, idx: number) => (
-                          <li key={idx} className="flex items-start gap-3 text-gray-300">
-                            <CheckCircle2 className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-                            <span className="leading-relaxed">{point}</span>
-                          </li>
-                        )) : <li className="text-gray-500 italic">None</li>}
-                      </ul>
-                    </section>
-
-                    <section>
-                      <h4 className="text-xl font-bold text-white mb-3 border-l-4 border-red-500 pl-3">Legal Implications</h4>
-                      <p className="text-gray-300 leading-relaxed bg-black/20 p-5 rounded-xl border border-white/5">
-                        {result.legalImplications}
-                      </p>
-                    </section>
-
-                    <section>
-                      <h4 className="text-xl font-bold text-white mb-3 border-l-4 border-emerald-500 pl-3">Recommendations</h4>
-                      <ul className="space-y-3 bg-black/20 p-5 rounded-xl border border-white/5">
-                        {Array.isArray(result.recommendations) && result.recommendations.length > 0 ? result.recommendations.map((rec: string, idx: number) => (
-                          <li key={idx} className="flex items-start gap-3 text-gray-300">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-2.5 flex-shrink-0"></div>
-                            <span className="leading-relaxed">{rec}</span>
-                          </li>
-                        )) : <li className="text-gray-500 italic">None</li>}
-                      </ul>
-                    </section>
-
-                    <section className="pt-6 border-t border-white/10">
-                      <h4 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                        <AlertCircle className="w-5 h-5 text-amber-400" />
-                        Named Entity Recognition (NER)
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <div className="space-y-2">
-                          <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Persons</h5>
-                          <div className="flex flex-wrap gap-2">
-                            {Array.isArray(result.entities?.persons) && result.entities.persons.length > 0 ? result.entities.persons.map((person: string, i: number) => (
-                              <span key={i} className="px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs">{person}</span>
-                            )) : <span className="text-gray-600 text-xs italic">None detected</span>}
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Locations</h5>
-                          <div className="flex flex-wrap gap-2">
-                            {Array.isArray(result.entities?.locations) && result.entities.locations.length > 0 ? result.entities.locations.map((loc: string, i: number) => (
-                              <span key={i} className="px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs">{loc}</span>
-                            )) : <span className="text-gray-600 text-xs italic">None detected</span>}
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Dates</h5>
-                          <div className="flex flex-wrap gap-2">
-                            {Array.isArray(result.entities?.dates) && result.entities.dates.length > 0 ? result.entities.dates.map((date: string, i: number) => (
-                              <span key={i} className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs">{date}</span>
-                            )) : <span className="text-gray-600 text-xs italic">None detected</span>}
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Organizations</h5>
-                          <div className="flex flex-wrap gap-2">
-                            {Array.isArray(result.entities?.organizations) && result.entities.organizations.length > 0 ? result.entities.organizations.map((org: string, i: number) => (
-                              <span key={i} className="px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs">{org}</span>
-                            )) : <span className="text-gray-600 text-xs italic">None detected</span>}
-                          </div>
-                        </div>
-
-                        <div className="space-y-2 lg:col-span-2">
-                          <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Legal Terms</h5>
-                          <div className="flex flex-wrap gap-2">
-                            {Array.isArray(result.entities?.legalTerms) && result.entities.legalTerms.length > 0 ? result.entities.legalTerms.map((term: string, i: number) => (
-                              <span key={i} className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">{term}</span>
-                            )) : <span className="text-gray-600 text-xs italic">None detected</span>}
-                          </div>
-                        </div>
-                      </div>
-                    </section>
-                  </div>
-
-                  <div className="mt-12 pt-6 border-t border-white/5 text-center">
-                    <p className="text-xs text-gray-500">
-                      This report has been automatically generated by AI Law Interpreter.<br/>
-                      Please review with a legal professional for accuracy.
-                    </p>
+                <div className="border-b border-white/10 pb-6 mb-8">
+                  <h2 className="text-3xl font-bold text-white mb-2">Legal Analysis Report</h2>
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-400">
+                    <span>Generated: {new Date().toLocaleString()}</span>
+                    <span>•</span>
+                    <span className="text-purple-400 font-medium">Analysis Type: {selectedType}</span>
                   </div>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+
+                <h3 className="text-2xl font-bold text-purple-300 mb-6">{result.title}</h3>
+
+                <div className="space-y-8">
+                  <section>
+                    <h4 className="text-xl font-bold text-white mb-3 border-l-4 border-purple-500 pl-3">Summary</h4>
+                    <p className="text-gray-300 leading-relaxed bg-black/20 p-5 rounded-xl border border-white/5">
+                      {result.summary}
+                    </p>
+                  </section>
+
+                  <section>
+                    <h4 className="text-xl font-bold text-white mb-3 border-l-4 border-blue-500 pl-3">Key Points</h4>
+                    <ul className="space-y-3 bg-black/20 p-5 rounded-xl border border-white/5">
+                      {Array.isArray(result.keyPoints) && result.keyPoints.length > 0 ? result.keyPoints.map((point: string, idx: number) => (
+                        <li key={idx} className="flex items-start gap-3 text-gray-300">
+                          <CheckCircle2 className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                          <span className="leading-relaxed">{point}</span>
+                        </li>
+                      )) : <li className="text-gray-500 italic">None</li>}
+                    </ul>
+                  </section>
+
+                  <section>
+                    <h4 className="text-xl font-bold text-white mb-3 border-l-4 border-red-500 pl-3">Legal Implications</h4>
+                    <p className="text-gray-300 leading-relaxed bg-black/20 p-5 rounded-xl border border-white/5">
+                      {result.legalImplications}
+                    </p>
+                  </section>
+
+                  <section>
+                    <h4 className="text-xl font-bold text-white mb-3 border-l-4 border-emerald-500 pl-3">Recommendations</h4>
+                    <ul className="space-y-3 bg-black/20 p-5 rounded-xl border border-white/5">
+                      {Array.isArray(result.recommendations) && result.recommendations.length > 0 ? result.recommendations.map((rec: string, idx: number) => (
+                        <li key={idx} className="flex items-start gap-3 text-gray-300">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-2.5 flex-shrink-0"></div>
+                          <span className="leading-relaxed">{rec}</span>
+                        </li>
+                      )) : <li className="text-gray-500 italic">None</li>}
+                    </ul>
+                  </section>
+
+                  <section className="pt-6 border-t border-white/10">
+                    <h4 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 text-amber-400" />
+                      Named Entity Recognition (NER)
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      <div className="space-y-2">
+                        <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Persons</h5>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.isArray(result.entities?.persons) && result.entities.persons.length > 0 ? result.entities.persons.map((person: string, i: number) => (
+                            <span key={i} className="px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs">{person}</span>
+                          )) : <span className="text-gray-600 text-xs italic">None detected</span>}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Locations</h5>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.isArray(result.entities?.locations) && result.entities.locations.length > 0 ? result.entities.locations.map((loc: string, i: number) => (
+                            <span key={i} className="px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs">{loc}</span>
+                          )) : <span className="text-gray-600 text-xs italic">None detected</span>}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Dates</h5>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.isArray(result.entities?.dates) && result.entities.dates.length > 0 ? result.entities.dates.map((date: string, i: number) => (
+                            <span key={i} className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs">{date}</span>
+                          )) : <span className="text-gray-600 text-xs italic">None detected</span>}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Organizations</h5>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.isArray(result.entities?.organizations) && result.entities.organizations.length > 0 ? result.entities.organizations.map((org: string, i: number) => (
+                            <span key={i} className="px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs">{org}</span>
+                          )) : <span className="text-gray-600 text-xs italic">None detected</span>}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 lg:col-span-2">
+                        <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Legal Terms</h5>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.isArray(result.entities?.legalTerms) && result.entities.legalTerms.length > 0 ? result.entities.legalTerms.map((term: string, i: number) => (
+                            <span key={i} className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">{term}</span>
+                          )) : <span className="text-gray-600 text-xs italic">None detected</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+
+                <div className="mt-12 pt-6 border-t border-white/5 text-center">
+                  <p className="text-xs text-gray-500">
+                    This report has been automatically generated by AI Law Interpreter.<br/>
+                    Please review with a legal professional for accuracy.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </motion.div>
       </div>
     </div>

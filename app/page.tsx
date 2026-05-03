@@ -4,9 +4,16 @@ import { motion, useScroll, useTransform } from 'framer-motion';
 import { FileText, Scale, Zap, Shield, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Testimonials } from '@/components/Testimonials';
+
+const Spline = dynamic(() => import('@splinetool/react-spline'), {
+  ssr: false,
+  loading: () => <div className="w-full h-full flex items-center justify-center bg-card rounded-xl"><div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin"></div></div>
+});
 
 const features = [
   {
@@ -97,16 +104,9 @@ export default function Home() {
               opacity,
               transformOrigin: "top center",
             }}
-            className="w-full rounded-xl overflow-hidden border border-border shadow-2xl bg-card flex items-center justify-center"
+            className="w-full rounded-xl overflow-hidden border border-border shadow-2xl bg-card flex items-center justify-center min-h-[400px] sm:min-h-[500px] md:min-h-[600px]"
           >
-            <Image 
-              src="/AI Brain.jpeg" 
-              alt="AI Brain Overview"
-              width={1200}
-              height={675}
-              className="w-full h-auto object-cover"
-              priority
-            />
+            <Spline scene="https://prod.spline.design/vmm-uzTzJDkVAmxP/scene.splinecode" />
           </motion.div>
         </div>
       </section>
@@ -165,6 +165,9 @@ export default function Home() {
           </CardContent>
         </Card>
       </section>
+
+      {/* Testimonials Section */}
+      <Testimonials />
     </div>
   );
 }
